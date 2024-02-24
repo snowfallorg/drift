@@ -21,6 +21,8 @@ ${kleur.bold(`OPTIONS`)}
     --new-hash                The current hash of the package
     --auto-hash               Automatically calculate the new hash
     --src                     The source attribute to use for hash information
+    --from                    The input text to replace
+    --to                      The text to replace the "--from" text with
 
     --help, -h                Show this help message
     --verbose, -v             Set logging verbosity
@@ -52,6 +54,11 @@ ${kleur.bold(`EXAMPLE`)}
     ${kleur.dim(`$`)} ${kleur.bold(
 			`drift rewrite`,
 		)} --file ./packages/my-package.nix --new-version 10.0.0 --auto-hash --src my-upstream-src
+
+    ${kleur.dim(`$ # Update arbitrary text.`)}
+    ${kleur.dim(`$`)} ${kleur.bold(
+			`drift rewrite`,
+		)} --file ./packages/my-package.nix --from my-text --to my-new-text
 `;
 
 	console.log(message);

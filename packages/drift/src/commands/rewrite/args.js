@@ -18,6 +18,9 @@ const getArgs = () =>
 			"--auto-hash": Boolean,
 
 			"--src": String,
+
+			"--from": String,
+			"--to": String,
 		},
 		{
 			permissive: false,

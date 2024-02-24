@@ -49,6 +49,24 @@ const command = async () => {
 	let text = original;
 
 	try {
+		if (args["--from"] || args["--to"]) {
+			if (!args["--from"]) {
+				logger.fatal("Missing --from argument");
+				help();
+				process.exit(1);
+			}
+
+			if (!args["--to"]) {
+				logger.fatal("Missing --to argument");
+				help();
+				process.exit(1);
+			}
+
+			text = text.replaceAll(args["--from"], args["--to"]);
+		}
+
+		await fs.write(file, text);
+
 		if (args["--new-version"]) {
 			let current = args["--current-version"];
 

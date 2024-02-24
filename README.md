@@ -196,4 +196,7 @@ EXAMPLE
 
     $ # Calculate hashes using a different source attribute.
     $ drift rewrite --file ./packages/my-package.nix --new-version 10.0.0 --auto-hash --src my-upstream-src
+
+    $ # Update arbitrary text.
+    $ drift rewrite --file ./packages/my-package.nix --from my-text --to my-new-text
 ```
