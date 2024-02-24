@@ -68,12 +68,25 @@ const nixEval = async (
 ) => {
 	const expression = [prelude, code].map(escapeNixExpression).join("\n");
 
-	const { stdout } = await exec(
-		`nix eval --show-trace ${impure ? "--impure" : ""} ${
-			json ? "--json" : ""
-		} --expr '${expression}'`,
-		{ ...execOptions },
-	);
+	let stdout;
+
+	try {
+		const result = await exec(
+			`nix eval --show-trace ${impure ? "--impure" : ""} ${
+				json ? "--json" : ""
+			} --expr '${expression}'`,
+			{
+				stdio: ["pipe", "pipe", "pipe"],
+				...execOptions,
+			},
+		);
+		stdout = result.stdout;
+	} catch (error) {
+		console.log(expression.trim());
+		log.fatal("Failed to evaluate Nix expression.");
+
+		process.exit(1);
+	}
 
 	if (json) {
 		return JSON.parse(stdout);
@@ -86,6 +99,7 @@ const nixBuild = async (
 	target,
 	{ link = false, json = false, ...execOptions } = {},
 ) => {
+	log.debug({ build: target });
 	const { stdout, stderr } = await exec(
 		`nix build --show-trace ${json ? "--json" : ""} --impure ${
 			link ? `--out-link '${link}'` : "--no-link"
@@ -105,6 +119,8 @@ const getCurrentSystem = async () => {
 		json: true,
 		impure: true,
 	});
+
+	log.debug({ system });
 
 	return system;
 };
@@ -128,7 +144,11 @@ in
 	results
 	`;
 
+	log.debug("Getting packages.");
+
 	const packages = await nixEval(code, { json: true, impure: true });
+
+	log.trace({ packages });
 
 	return packages;
 };
@@ -155,7 +175,7 @@ in
 	else
 		{
 			name = package.name;
-			version = package.version;
+			version = package.version or null;
 			path = "\${package}";
 			script = update-bin;
 			snowfall = package.meta.snowfall or null;
@@ -163,13 +183,22 @@ in
 		}
 	`;
 
+	log.debug(`Getting package "${name}".`);
+
 	const package = await nixEval(code, { json: true, impure: true });
+
+	log.trace({ name, package });
 
 	return package;
 };
 
 const updateFlakePackage = async (flake, name, package, hash) => {
 	const system = await getCurrentSystem();
+
+	log.debug(`Updating package.`, {
+		name,
+		hash,
+	});
 
 	await nixBuild(`path:${flake}#packages.${system}.${name}.passthru.update`, {
 		json: true,
@@ -186,25 +215,38 @@ const updateFlakePackage = async (flake, name, package, hash) => {
 		file = stripStorePath(package.snowfall.path);
 	}
 
-	const { stdout, stderr } = await exec(package.script, {
-		cwd: flake,
-		env: {
-			PATH: `${root}/bin:${process.env.PATH}`,
-			DRIFT_NAME: name,
-			DRIFT_FILE: file ? path.resolve(flake, file) : undefined,
-			DRIFT_CURRENT_VERSION: package.version,
-			DRIFT_CURRENT_HASH: hash.value,
-			FORCE_COLOR: process.env.FORCE_COLOR || "1",
-			LOG_ICONS: process.env.LOG_ICONS || process.stdout.isTTY || "false",
-		},
-	});
+	let stdout = "";
+	let stderr = "";
+
+	try {
+		const result = await exec(package.script, {
+			cwd: flake,
+			env: {
+				PATH: `${root}/bin:${process.env.PATH}`,
+				DRIFT_NAME: name,
+				DRIFT_FILE: file ? path.resolve(flake, file) : undefined,
+				...(hash.value ? { DRIFT_CURRENT_HASH: hash.value } : {}),
+				...(package.version ? { DRIFT_CURRENT_VERSION: package.version } : {}),
+				FORCE_COLOR: process.env.FORCE_COLOR || "1",
+				LOG_ICONS: process.env.LOG_ICONS || process.stdout.isTTY || "false",
+			},
+		});
+
+		stdout = result.stdout;
+		stderr = result.stderr;
+	} catch (error) {
+		stdout = error.stdout;
+		stderr = error.stderr;
+	}
 
 	for (const line of stdout.split("\n")) {
 		console.log(line);
 	}
 
 	if (stderr) {
-		throw new Error(stderr);
+		console.log(stderr);
+
+		throw new Error(`Failed to update package "${name}".`);
 	}
 };
 

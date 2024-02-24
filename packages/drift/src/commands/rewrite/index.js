@@ -107,6 +107,14 @@ const command = async () => {
 		} else if (args["--auto-hash"]) {
 			const { algorithm, value } = await nix.getPackageHash(flake, name, src);
 
+			if (!value) {
+				logger.fatal("Package hash no hash value, cannot auto-generate");
+
+				throw new Error(
+					`Package "${name}" has no hash value, but --auto-hash was set.`,
+				);
+			}
+
 			const hash = await nix.getNewPackageHash(flake, file, name, {
 				algorithm,
 				value,
@@ -124,7 +132,15 @@ const command = async () => {
 
 		await fs.write(file, text);
 	} catch (error) {
-		await fs.write(file, original);
+		logger.fatal(`Failed updating file "${file}"`);
+
+		try {
+			await fs.write(file, original);
+		} catch (error) {
+			logger.fail(`Failed to restore original file "${file}"`);
+		}
+
+		throw error;
 	}
 };
 
